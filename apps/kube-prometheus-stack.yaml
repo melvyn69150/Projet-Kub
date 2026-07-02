@@ -1,0 +1,75 @@
+# Observabilite (metriques) : kube-prometheus-stack via Helm, pilote par Argo CD.
+# Installe d'un coup : Prometheus Operator, Prometheus, Grafana, Alertmanager,
+# node-exporter (DaemonSet) et kube-state-metrics, avec dashboards preconfigures.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 87.4.0
+    helm:
+      valuesObject:
+        # --- Grafana -----------------------------------------------------------
+        grafana:
+          adminPassword: admin-lab   # lab uniquement ; en prod -> secret
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          # Datasource Loki (phase logs) ajoutee a Grafana automatiquement
+          additionalDataSources:
+            - name: Loki
+              type: loki
+              url: http://loki.logging.svc.cluster.local:3100
+              access: proxy
+
+        # --- Prometheus --------------------------------------------------------
+        prometheus:
+          prometheusSpec:
+            retention: 2d            # lab : 2 jours d'historique suffisent
+            resources:
+              requests: { cpu: 200m, memory: 512Mi }
+              limits:   { cpu: "1",  memory: 1536Mi }
+            # Par defaut Prometheus ne regarde que les ServiceMonitors crees par
+            # le chart. On desactive ce filtre pour qu'il decouvre AUSSI les
+            # notres (ex : podinfo) et nos PrometheusRules.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
+
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests: { cpu: 25m, memory: 64Mi }
+              limits:   { cpu: 100m, memory: 128Mi }
+
+        # --- Specifique k3s ----------------------------------------------------
+        # k3s embarque scheduler/controller-manager/proxy DANS le binaire k3s :
+        # pas de pods dedies a scraper -> on desactive ces cibles pour eviter
+        # des alertes "TargetDown" en permanence (faux positifs).
+        kubeEtcd:              { enabled: false }
+        kubeScheduler:         { enabled: false }
+        kubeControllerManager: { enabled: false }
+        kubeProxy:             { enabled: false }
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Les CRDs de Prometheus Operator depassent la taille max des annotations
+      # kubectl classiques -> apply cote serveur obligatoire.
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

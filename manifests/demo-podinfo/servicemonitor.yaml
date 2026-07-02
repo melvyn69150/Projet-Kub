@@ -1,0 +1,18 @@
+# ServiceMonitor : dit a Prometheus de scraper les metriques de podinfo.
+# Prometheus Operator lit cet objet et configure Prometheus automatiquement :
+# aucune modif de config Prometheus a la main.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: podinfo
+  namespace: demo
+  labels:
+    app: podinfo
+spec:
+  selector:
+    matchLabels:
+      app: podinfo        # cible le Service podinfo (toujours par label !)
+  endpoints:
+    - port: http           # le port nomme "http" du Service
+      path: /metrics       # endpoint Prometheus expose par podinfo
+      interval: 15s

@@ -1,0 +1,134 @@
+# Observabilite (logs) : Loki, la "base de donnees de logs", en mode Monolithic
+# (un seul pod, adapte au lab). Grafana l'interroge via la datasource ajoutee
+# dans kube-prometheus-stack.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Le chart Loki a demenage vers le repo communautaire (mars 2026).
+    repoURL: https://grafana-community.github.io/helm-charts
+    chart: loki
+    targetRevision: 18.3.0
+    helm:
+      valuesObject:
+        deploymentMode: Monolithic   # ex-"SingleBinary", renomme dans le chart
+        loki:
+          auth_enabled: false        # pas de multi-tenant en lab
+          commonConfig:
+            replication_factor: 1    # obligatoire avec 1 seul replica
+          schemaConfig:
+            configs:
+              - from: "2024-04-01"
+                store: tsdb
+                object_store: filesystem
+                schema: v13
+                index: { prefix: loki_index_, period: 24h }
+          storage:
+            type: filesystem         # stockage local (PVC k3s local-path)
+          limits_config:
+            retention_period: 48h    # 2 jours de logs suffisent en lab
+        singleBinary:
+          replicas: 1
+          persistence: { enabled: true, size: 5Gi }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 768Mi }
+        # Economie de RAM : on coupe tout ce qui n'est pas necessaire au lab.
+        gateway:      { enabled: false }
+        lokiCanary:   { enabled: false }
+        test:         { enabled: false }
+        chunksCache:  { enabled: false }   # memcached ~1Gi par defaut !
+        resultsCache: { enabled: false }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
+---
+# Collecteur de logs : Grafana Alloy (successeur officiel de Promtail, EOL 03/2026).
+# DaemonSet : un pod par noeud, qui lit les logs de tous les pods du noeud via
+# l'API Kubernetes et les pousse vers Loki.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 1.9.0
+    helm:
+      valuesObject:
+        controller:
+          type: daemonset
+          # Les control planes sont taintes : on tolere le taint pour collecter
+          # AUSSI leurs logs (sinon angle mort sur cp1/cp2/cp3).
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+        alloy:
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
+          configMap:
+            content: |
+              // Pipeline Alloy : decouvrir les pods -> lire leurs logs -> Loki.
+              discovery.kubernetes "pods" {
+                role = "pod"
+              }
+
+              discovery.relabel "pods" {
+                targets = discovery.kubernetes.pods.targets
+                // Labels utiles pour filtrer dans Grafana
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label  = "namespace"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label  = "pod"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_container_name"]
+                  target_label  = "container"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_node_name"]
+                  target_label  = "node"
+                }
+              }
+
+              loki.source.kubernetes "pods" {
+                targets    = discovery.relabel.pods.output
+                forward_to = [loki.write.default.receiver]
+              }
+
+              loki.write "default" {
+                endpoint {
+                  url = "http://loki.logging.svc.cluster.local:3100/loki/api/v1/push"
+                }
+              }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: logging
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

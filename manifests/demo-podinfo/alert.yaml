@@ -1,0 +1,22 @@
+# PrometheusRule : une alerte custom. Si moins de 2 podinfo sont up pendant
+# 2 minutes, l'alerte "PodinfoInsuffisant" se declenche dans Alertmanager.
+# (2 = le minAvailable de notre PodDisruptionBudget : coherence avec la HA.)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: podinfo-alerts
+  namespace: demo
+  labels:
+    app: podinfo
+spec:
+  groups:
+    - name: podinfo.rules
+      rules:
+        - alert: PodinfoInsuffisant
+          expr: sum(up{job="podinfo"}) < 2
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Moins de 2 replicas podinfo disponibles"
+            description: "Seulement {{ $value }} pod(s) podinfo repondent au scrape. HA applicative degradee (minimum attendu : 2)."
