@@ -1,0 +1,53 @@
+# Deploiement de demo : podinfo, 3 replicas repartis sur des noeuds differents.
+# Reutilise les bonnes pratiques HA vues en phase 1, au niveau applicatif cette fois.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  namespace: demo
+  labels:
+    app: podinfo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: podinfo
+  template:
+    metadata:
+      labels:
+        app: podinfo
+    spec:
+      # Repartit les pods sur des noeuds distincts : si un worker tombe,
+      # il reste des replicas ailleurs. C'est la HA au niveau applicatif.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: podinfo
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.11.2
+          ports:
+            - name: http
+              containerPort: 9898
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9898
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9898
+            initialDelaySeconds: 5
+            periodSeconds: 10

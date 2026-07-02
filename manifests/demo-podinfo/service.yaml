@@ -1,0 +1,15 @@
+# Service ClusterIP : point d'acces stable aux 3 pods podinfo.
+apiVersion: v1
+kind: Service
+metadata:
+  name: podinfo
+  namespace: demo
+  labels:
+    app: podinfo
+spec:
+  selector:
+    app: podinfo
+  ports:
+    - name: http
+      port: 9898
+      targetPort: 9898

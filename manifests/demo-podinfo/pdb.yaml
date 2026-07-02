@@ -1,0 +1,12 @@
+# PodDisruptionBudget : garantit qu'au moins 2 pods restent dispo pendant
+# une operation de maintenance (drain d'un noeud, mise a jour...).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: podinfo

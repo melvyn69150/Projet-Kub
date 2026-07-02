@@ -1,0 +1,28 @@
+# App-of-apps : application racine.
+# Argo CD surveille le dossier apps/ du repo Git. Chaque manifeste Application
+# qu'on y ajoute (observabilite, backup, autoscaling...) sera deploye
+# automatiquement. C'est le point d'entree unique du GitOps.
+#
+# >>> REMPLACE l'URL repoURL par celle de TON depot GitHub <<<
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CHANGE-ME/k8s-platform.git
+    targetRevision: main
+    path: apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true      # supprime ce qui n'est plus dans Git
+      selfHeal: true   # remet en conformite si qqn modifie a la main
+    syncOptions:
+      - CreateNamespace=true

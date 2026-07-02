@@ -1,0 +1,26 @@
+# Application enfant : deploie l'app de demo "podinfo" depuis manifests/demo-podinfo.
+# C'est cette Application qui prouve la boucle GitOps de bout en bout.
+#
+# >>> REMPLACE l'URL repoURL par celle de TON depot GitHub (identique a root-app) <<<
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-podinfo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CHANGE-ME/k8s-platform.git
+    targetRevision: main
+    path: manifests/demo-podinfo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
