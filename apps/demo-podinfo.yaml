@@ -12,7 +12,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: repoURL: https://github.com/melvyn69150/Projet-Kub.git
+    repoURL: https://github.com/melvyn69150/Projet-Kub.git
     targetRevision: main
     path: manifests/demo-podinfo
   destination:
