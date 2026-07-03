@@ -39,6 +39,22 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits:   { cpu: 500m, memory: 768Mi }
+        # Le chart exige qu'UN SEUL mode soit actif : on met explicitement a 0
+        # les replicas de tous les composants des autres modes (SimpleScalable
+        # et Distributed), sinon le rendu Helm echoue a la validation.
+        backend:        { replicas: 0 }
+        read:           { replicas: 0 }
+        write:          { replicas: 0 }
+        ingester:       { replicas: 0 }
+        querier:        { replicas: 0 }
+        queryFrontend:  { replicas: 0 }
+        queryScheduler: { replicas: 0 }
+        distributor:    { replicas: 0 }
+        compactor:      { replicas: 0 }
+        indexGateway:   { replicas: 0 }
+        bloomPlanner:   { replicas: 0 }
+        bloomBuilder:   { replicas: 0 }
+        bloomGateway:   { replicas: 0 }
         # Economie de RAM : on coupe tout ce qui n'est pas necessaire au lab.
         gateway:      { enabled: false }
         lokiCanary:   { enabled: false }
