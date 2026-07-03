@@ -1,0 +1,31 @@
+# Application enfant : worker de demo scale par KEDA (manifests/keda-worker).
+# >>> REMPLACE l'URL repoURL si ton depot a un autre nom <<<
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda-worker
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/melvyn69150/Projet-Kub.git
+    targetRevision: main
+    path: manifests/keda-worker
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

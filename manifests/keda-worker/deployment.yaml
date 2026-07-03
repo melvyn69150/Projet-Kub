@@ -1,0 +1,29 @@
+# "Worker" de demonstration pour KEDA : une deuxieme instance podinfo qui
+# simule des workers de traitement. Au repos : 0 pod (scale-to-zero).
+# KEDA le fait apparaitre quand le trafic sur podinfo depasse un seuil.
+# PAS de champ replicas : KEDA en est le proprietaire.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo-worker
+  namespace: demo
+  labels:
+    app: podinfo-worker
+spec:
+  selector:
+    matchLabels:
+      app: podinfo-worker
+  template:
+    metadata:
+      labels:
+        app: podinfo-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/stefanprodan/podinfo:6.11.2
+          ports:
+            - name: http
+              containerPort: 9898
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }

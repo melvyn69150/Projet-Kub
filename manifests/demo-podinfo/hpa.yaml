@@ -1,0 +1,27 @@
+# HorizontalPodAutoscaler : adapte automatiquement le nombre de pods podinfo
+# a la charge CPU. Base de calcul : les resources.requests du deployment
+# (50m CPU) -> "70%" signifie 70% de 50m = 35m par pod en moyenne.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: podinfo
+  namespace: demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: podinfo
+  minReplicas: 3        # coherent avec notre HA (spread sur 3 workers, PDB min 2)
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0     # reagit vite a la montee (demo)
+    scaleDown:
+      stabilizationWindowSeconds: 60    # redescend prudemment (evite le yo-yo)

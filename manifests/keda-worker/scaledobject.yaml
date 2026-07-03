@@ -1,0 +1,24 @@
+# ScaledObject KEDA : autoscaling EVENEMENTIEL, pilote par une metrique
+# Prometheus (synergie avec la phase 3 !).
+# Regle : si le trafic HTTP sur podinfo depasse 5 req/s par worker,
+# KEDA cree des workers (jusqu'a 4). Trafic nul -> 0 worker (scale-to-zero,
+# ce que le HPA classique ne sait PAS faire).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: podinfo-worker
+  namespace: demo
+spec:
+  scaleTargetRef:
+    name: podinfo-worker
+  minReplicaCount: 0          # <- l'atout KEDA : zero pod au repos
+  maxReplicaCount: 4
+  pollingInterval: 15         # verifie la metrique toutes les 15 s
+  cooldownPeriod: 60          # attend 60 s de calme avant de revenir a 0
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+        # Debit de requetes HTTP recues par podinfo (histogramme _count)
+        query: sum(rate(http_request_duration_seconds_count{namespace="demo", job="podinfo"}[1m]))
+        threshold: "5"        # 5 req/s par replica de worker

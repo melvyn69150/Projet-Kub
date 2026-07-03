@@ -12,7 +12,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/melvyn69150/Projet-Kub.git
+    repoURL: https://github.com/CHANGE-ME/k8s-platform.git
     targetRevision: main
     path: manifests/demo-podinfo
   destination:
@@ -24,3 +24,12 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # Ne pas ecraser le nombre de replicas gere par le HPA
+      - RespectIgnoreDifferences=true
+  # Argo ignore les ecarts sur spec.replicas : c'est le HPA qui en est le
+  # proprietaire (autoscaling), pas Git.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
