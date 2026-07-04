@@ -8,9 +8,7 @@ metadata:
   labels:
     app: podinfo
 spec:
-  # PAS de champ "replicas" ici : c'est le HPA (hpa.yaml) qui pilote le nombre
-  # de pods desormais. Regle d'or HPA + GitOps : un seul proprietaire du champ,
-  # sinon Argo (selfHeal) et le HPA se battraient en boucle.
+  replicas: 3
   selector:
     matchLabels:
       app: podinfo

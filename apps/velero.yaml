@@ -1,0 +1,88 @@
+# Backup : Velero (chart officiel vmware-tanzu). Sauvegarde les ressources
+# Kubernetes (+ donnees des volumes via file-system backup) vers MinIO (S3).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: velero
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://vmware-tanzu.github.io/helm-charts
+    chart: velero
+    targetRevision: 12.1.0
+    helm:
+      valuesObject:
+        # Le plugin S3/AWS est charge via un initContainer (mecanisme Velero).
+        # Compatibilite : Velero 1.18 <-> plugin v1.14.
+        initContainers:
+          - name: velero-plugin-for-aws
+            image: velero/velero-plugin-for-aws:v1.14.0
+            volumeMounts:
+              - mountPath: /target
+                name: plugins
+
+        # Identifiants d'acces a MinIO (format "credentials AWS").
+        # Lab uniquement : en prod, secret gere hors Git.
+        credentials:
+          secretContents:
+            cloud: |
+              [default]
+              aws_access_key_id=minioadmin
+              aws_secret_access_key=minioadmin-lab
+
+        configuration:
+          # Ou stocker les backups : le bucket "velero" de notre MinIO.
+          # s3ForcePathStyle est OBLIGATOIRE pour MinIO (pas de DNS par bucket).
+          backupStorageLocation:
+            - name: default
+              provider: aws
+              bucket: velero
+              config:
+                region: minio
+                s3ForcePathStyle: "true"
+                s3Url: http://minio.minio.svc.cluster.local:9000
+          # Pas de snapshots "cloud" en local : on sauvegarde les donnees des
+          # volumes par copie de fichiers (kopia) via le node-agent.
+          volumeSnapshotLocation: []
+          defaultVolumesToFsBackup: true
+
+        snapshotsEnabled: false
+        # Node-agent (DaemonSet) : necessaire au file-system backup des volumes.
+        deployNodeAgent: true
+        nodeAgent:
+          tolerations:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+              effect: NoSchedule
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { cpu: 300m, memory: 512Mi }
+
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+          limits:   { cpu: 500m, memory: 512Mi }
+
+        # Backup PLANIFIE (la contrainte "backup" en mode automatique) :
+        # chaque nuit a 3h, sauvegarde du namespace demo, retention 72h.
+        schedules:
+          daily-demo:
+            disabled: false
+            schedule: "0 3 * * *"
+            template:
+              includedNamespaces: [demo]
+              ttl: 72h
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: velero
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true   # CRDs Velero volumineuses
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

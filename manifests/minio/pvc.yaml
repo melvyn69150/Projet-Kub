@@ -1,0 +1,12 @@
+# Volume persistant pour MinIO : c'est ici que vivront les backups Velero.
+# k3s fournit la StorageClass "local-path" par defaut.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data
+  namespace: minio
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
